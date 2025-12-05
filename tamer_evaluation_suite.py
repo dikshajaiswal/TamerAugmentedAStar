@@ -503,7 +503,7 @@ def quick_demo():
     print("Estimated time: 30-60 seconds\n")
     
     evaluator = EvaluationSuite()
-    evaluator.run_full_evaluation(num_iterations=5)
+    evaluator.run_full_evaluation(num_iterations=50)
     
     print("\n" + "="*70)
     print("PRESENTATION FILES GENERATED:")
