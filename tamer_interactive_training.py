@@ -8,7 +8,8 @@ import sys
 try:
     from tamer_astar_baseline import (GridWorld, AStarPlanner, TAMERRewardModel, 
                                       Visualizer, create_scenario_1, 
-                                      create_scenario_2, create_scenario_3)
+                                      create_scenario_2, create_scenario_3,
+                                      create_scenario_4, create_scenario_5)
 except:
     print("ERROR: Please save the baseline implementation as 'tamer_astar_baseline.py'")
     print("Then run this interactive training script.")
@@ -20,8 +21,8 @@ class InteractiveTAMERTrainer:
         self.start = start
         self.goal = goal
         self.scenario_name = scenario_name
-        # Use 15-dimensional model with enhanced features (same as evaluation)
-        self.reward_model = TAMERRewardModel(feature_dim=15)
+        # Use 21-dimensional model with directional features
+        self.reward_model = TAMERRewardModel(feature_dim=21)
         self.reward_model.alpha = 0.3  # Slightly higher for interactive learning
         self.current_path = None
         self.iteration = 0
@@ -30,13 +31,29 @@ class InteractiveTAMERTrainer:
         # Try to load existing model
         model_file = f"tamer_model_{scenario_name}.pkl"
         if self.reward_model.load(model_file):
-            print(f"Loaded existing model from {model_file}")
-            self.iteration = len(self.reward_model.feedback_history)
+            # Check if loaded model has correct dimensions
+            if len(self.reward_model.weights) != 21:
+                print(f"⚠️  Loaded model has {len(self.reward_model.weights)} features, but code expects 21.")
+                print(f"   The model was trained with an older version.")
+                
+                response = input("   Delete old model and start fresh? (y/n): ").lower()
+                if response == 'y':
+                    import os
+                    os.remove(model_file)
+                    print(f"   Deleted {model_file}. Starting with fresh model.")
+                    self.reward_model = TAMERRewardModel(feature_dim=21)
+                    self.reward_model.alpha = 0.3
+                else:
+                    print(f"   Keeping old model. Note: This may cause errors!")
+                    print(f"   Recommend deleting {model_file} and starting fresh.")
+            else:
+                print(f"✓ Loaded existing model from {model_file}")
+                self.iteration = len(self.reward_model.feedback_history)
         
         self.setup_ui()
     
     def extract_enhanced_features(self, pos, action):
-        """Extract enhanced features that include hazard zone info (same as evaluation)"""
+        """Extract enhanced features that include hazard zone info AND directional info"""
         x, y = pos
         ax, ay = action
         next_x, next_y = x + ax, y + ay
@@ -50,6 +67,13 @@ class InteractiveTAMERTrainer:
         
         # Distance to nearest obstacle
         obs_dist = self.distance_to_nearest_obstacle(pos)
+        
+        # NEW: Directional features relative to hazard zone center
+        hazard_center_y = 25  # Middle of grid (where hazards typically are)
+        above_hazard = 1.0 if y < hazard_center_y else 0.0  # Are we above center?
+        below_hazard = 1.0 if y > hazard_center_y else 0.0  # Are we below center?
+        moving_up = 1.0 if ay < 0 else 0.0  # Moving toward top
+        moving_down = 1.0 if ay > 0 else 0.0  # Moving toward bottom
         
         features = np.array([
             x / 50.0,  # Normalized position
@@ -66,6 +90,12 @@ class InteractiveTAMERTrainer:
             (x / 50.0) * (y / 50.0),  # Position interaction
             in_hazard * (ax / 2.0),  # Hazard-action interaction
             (1.0 - in_hazard) * min(obs_dist / 5.0, 1.0),  # Safe area indicator
+            above_hazard,  # NEW: Above center line
+            below_hazard,  # NEW: Below center line
+            moving_up,  # NEW: Moving upward
+            moving_down,  # NEW: Moving downward
+            above_hazard * moving_up,  # NEW: Above AND moving up
+            below_hazard * moving_down,  # NEW: Below AND moving down
             1.0  # Bias
         ])
         return features
@@ -138,8 +168,13 @@ class InteractiveTAMERTrainer:
         
         self.reward_model.predict = enhanced_predict
         
-        # Plan with TAMER - increase lambda progressively
-        lambda_weight = min(5.0, 1.0 * self.iteration) if self.iteration > 1 else 0.0
+        # IMPORTANT: Increase lambda more aggressively for better influence
+        # Start with some weight even on iteration 1 to break ties
+        if self.iteration == 1:
+            lambda_weight = 0.5  # Small initial exploration
+        else:
+            lambda_weight = min(10.0, 2.0 * self.iteration)  # Grow quickly
+        
         planner = AStarPlanner(self.world, self.reward_model, lambda_weight)
         self.current_path = planner.plan(self.start, self.goal)
         
@@ -147,14 +182,26 @@ class InteractiveTAMERTrainer:
         self.reward_model.predict = original_predict
         
         # Print debug info
-        if self.iteration > 1:
-            sample_hazard_pos = list(self.world.hazard_zones)[0] if self.world.hazard_zones else (25, 25)
-            sample_action = (1, 0)
-            features = self.extract_enhanced_features(sample_hazard_pos, sample_action)
-            reward = np.dot(self.reward_model.weights, features)
+        if self.current_path and len(self.current_path) > 0:
+            # Calculate average Y position to see if path is upper/middle/lower
+            avg_y = sum(p[1] for p in self.current_path) / len(self.current_path)
+            route_type = "UPPER" if avg_y < 20 else ("LOWER" if avg_y > 30 else "MIDDLE")
+            
+            # Sample rewards for different positions
+            sample_upper = (25, 15)  # Upper route
+            sample_middle = (25, 25)  # Middle
+            sample_lower = (25, 35)  # Lower route
+            action = (1, 0)
+            
+            reward_upper = enhanced_predict(sample_upper, action)
+            reward_middle = enhanced_predict(sample_middle, action)
+            reward_lower = enhanced_predict(sample_lower, action)
+            
             print(f"Iteration {self.iteration}: Lambda={lambda_weight:.1f}, "
-                  f"Sample hazard reward={reward:.2f}, "
-                  f"Weights norm={np.linalg.norm(self.reward_model.weights):.2f}")
+                  f"Path type={route_type} (avg_y={avg_y:.1f})")
+            print(f"  Sample rewards: Upper={reward_upper:.2f}, "
+                  f"Middle={reward_middle:.2f}, Lower={reward_lower:.2f}")
+            print(f"  Weights norm={np.linalg.norm(self.reward_model.weights):.2f}")
         
         self.draw()
         
@@ -230,13 +277,13 @@ class InteractiveTAMERTrainer:
         self.fig.canvas.draw()
         
     def on_click(self, event):
-        """Handle mouse clicks for feedback"""
+        """Handle mouse clicks for feedback - PURE TAMER: only on actual agent actions"""
         if event.inaxes != self.ax or self.current_path is None:
             return
         
         click_pos = (event.xdata, event.ydata)
         
-        # Find nearest path segment
+        # Find nearest path segment (must be ON the actual path the agent took)
         min_dist = float('inf')
         nearest_segment = None
         
@@ -250,19 +297,24 @@ class InteractiveTAMERTrainer:
                 min_dist = dist
                 nearest_segment = (p1, p2, i)
         
-        if min_dist < 3.0:  # Within 3 units
+        # Only accept feedback if clicking NEAR an actual path segment
+        if min_dist < 3.0:  # Within 3 units of actual path
             p1, p2, idx = nearest_segment
             action = (p2[0] - p1[0], p2[1] - p1[1])
             
             # Left click = positive, Right click = negative
-            # Make feedback stronger for better learning
-            feedback = 3.0 if event.button == 1 else -3.0
+            # Use VERY strong feedback for scenario 3 to overcome geometric bias
+            feedback = 5.0 if event.button == 1 else -5.0
             
-            # Update using enhanced features
+            # Update using enhanced features - apply feedback MULTIPLE times for stronger effect
             features = self.extract_enhanced_features(p1, action)
-            prediction = np.dot(self.reward_model.weights, features)
-            error = feedback - prediction
-            self.reward_model.weights += self.reward_model.alpha * error * features
+            
+            # Apply update 3 times to make learning faster and stronger
+            for _ in range(3):
+                prediction = np.dot(self.reward_model.weights, features)
+                error = feedback - prediction
+                self.reward_model.weights += self.reward_model.alpha * error * features
+            
             self.reward_model.feedback_history.append((p1, action, feedback))
             
             self.feedback_count += 1
@@ -271,15 +323,20 @@ class InteractiveTAMERTrainer:
             color = 'green' if feedback > 0 else 'red'
             self.ax.plot([p1[0], p2[0]], [p1[1], p2[1]], 
                        color=color, linewidth=6, alpha=0.9, zorder=5)
-            self.ax.text(p1[0], p1[1], f"{'+3' if feedback > 0 else '-3'}", 
+            self.ax.text(p1[0], p1[1], f"{'+5' if feedback > 0 else '-5'} x3", 
                        fontsize=14, color=color, fontweight='bold',
                        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
             
-            self.fig.canvas.draw()
-            
             in_hazard = "IN HAZARD" if p1 in self.world.hazard_zones else "safe"
-            print(f"Feedback {self.feedback_count}: {'+3' if feedback > 0 else '-3'} at {p1} ({in_hazard}), "
-                  f"prediction was {prediction:.2f}")
+            route_info = f"y={p1[1]:.0f} ({'UPPER' if p1[1] < 20 else 'LOWER' if p1[1] > 30 else 'MIDDLE'})"
+            print(f"Feedback {self.feedback_count}: {'+5' if feedback > 0 else '-5'} x3 at {p1} ({in_hazard}, {route_info})")
+        else:
+            # Click too far from path - inform user this is not valid TAMER feedback
+            print(f"⚠️  Click at {(int(click_pos[0]), int(click_pos[1]))} is too far from path.")
+            print(f"   TAMER requires feedback on ACTUAL agent actions only.")
+            print(f"   Click closer to the blue/red path segments (within 3 units).")
+        
+        self.fig.canvas.draw()
     
     def point_to_segment_distance(self, point, seg_start, seg_end):
         """Calculate distance from point to line segment"""
@@ -348,10 +405,16 @@ class InteractiveTAMERTrainer:
 
 def train_scenario(scenario_num):
     """Train on a specific scenario"""
-    scenarios = [create_scenario_1(), create_scenario_2(), create_scenario_3()]
+    scenarios = [
+        create_scenario_1(), 
+        create_scenario_2(), 
+        create_scenario_3(),
+        create_scenario_4(),
+        create_scenario_5()
+    ]
     
-    if scenario_num < 1 or scenario_num > 3:
-        print("Invalid scenario number. Choose 1, 2, or 3.")
+    if scenario_num < 1 or scenario_num > 5:
+        print("Invalid scenario number. Choose 1-5.")
         return
     
     world, start, goal, title = scenarios[scenario_num - 1]
@@ -360,18 +423,24 @@ def train_scenario(scenario_num):
     print("=" * 70)
     print(f"TAMER Interactive Training - {title}")
     print("=" * 70)
+    print("\n⚠️  PURE TAMER: Feedback ONLY on agent's actual actions")
     print("\nInstructions:")
-    print("1. LEFT CLICK near path segments you LIKE (good behavior)")
-    print("2. RIGHT CLICK near path segments you DON'T LIKE (bad behavior)")
+    print("1. LEFT CLICK on path segments you LIKE (positive feedback)")
+    print("2. RIGHT CLICK on path segments you DON'T LIKE (negative feedback)")
     print("3. Click 'Replan with Feedback' to see updated path")
     print("4. Repeat steps 1-3 until satisfied")
-    print("5. Click 'Save Model' to save progress")
-    print("6. Click 'Done & Compare' to see final results")
-    print("\nTips:")
-    print("- RIGHT CLICK on RED path segments (in hazard zones)")
-    print("- LEFT CLICK on BLUE path segments (safe areas)")
-    print("- Give 5-10 feedback per iteration, then replan")
-    print("- Watch the path change to avoid hazards!")
+    print("5. Click 'Done & Compare' to see final results")
+    print("\n📚 TAMER Theory:")
+    print("- You can ONLY give feedback on paths the agent actually tried")
+    print("- Negative feedback says 'don't do this'")
+    print("- Positive feedback says 'do more like this'")
+    print("- Agent explores alternatives through replanning")
+    print("\nFor Scenario 3 (Route Preference):")
+    print("- If path goes below hazard, give NEGATIVE feedback on those segments")
+    print("- Agent will try alternative routes on replan")
+    print("- If new path goes above (good!), give POSITIVE feedback")
+    print("- If new path goes even lower (bad!), give NEGATIVE and stronger negative on original")
+    print("- May take 5-10 iterations for agent to find the route you prefer")
     print("=" * 70)
     print()
     
@@ -384,13 +453,23 @@ if __name__ == "__main__":
     print("2. Scenario 2: Safety Margin Preference")
     print("3. Scenario 3: Subjective Route Preference")
     
-    choice = input("\nEnter scenario number (1-3): ")
+    choice = input("\nEnter scenario number (1-3): ").strip()
     
     try:
         scenario_num = int(choice)
-        train_scenario(scenario_num)
+        if scenario_num in [1, 2, 3]:
+            train_scenario(scenario_num)
+        else:
+            print("Invalid input. Please enter 1, 2, or 3.")
     except ValueError:
         print("Invalid input. Please enter a number 1, 2, or 3.")
+    except Exception as e:
+        print(f"\n❌ Error occurred: {e}")
+        print("\nTroubleshooting:")
+        print("1. If you see 'shapes not aligned', delete old model files:")
+        print("   rm tamer_model_*.pkl")
+        print("2. Make sure tamer_astar_baseline.py is in the same directory")
+        print("3. Run: python3 tamer_interactive_training.py")
         
         self.setup_ui()
         
@@ -622,15 +701,29 @@ def train_scenario(scenario_num):
     plt.show()
 
 if __name__ == "__main__":
-    print("\nSelect scenario to train:")
-    print("1. Scenario 1: Implicit Hazard Avoidance")
-    print("2. Scenario 2: Safety Margin Preference")
-    print("3. Scenario 3: Subjective Route Preference")
+    print("\n" + "="*70)
+    print("TAMER Interactive Training - Select Scenario")
+    print("="*70)
+    print("\n1. Scenario 1: Multi-Hazard Navigation")
+    print("2. Scenario 2: Maze Navigation with Safety Constraints")
+    print("3. Scenario 3: Multi-Route Preference with Complex Hazards")
+    print("4. Scenario 4: Dense Urban Navigation")
+    print("5. Scenario 5: Dynamic Obstacle Field")
     
-    choice = input("\nEnter scenario number (1-3): ")
+    choice = input("\nEnter scenario number (1-5): ").strip()
     
     try:
         scenario_num = int(choice)
-        train_scenario(scenario_num)
+        if scenario_num in [1, 2, 3, 4, 5]:
+            train_scenario(scenario_num)
+        else:
+            print("Invalid input. Please enter 1-5.")
     except ValueError:
-        print("Invalid input. Please enter a number 1, 2, or 3.")
+        print("Invalid input. Please enter a number 1-5.")
+    except Exception as e:
+        print(f"\n❌ Error occurred: {e}")
+        print("\nTroubleshooting:")
+        print("1. If you see 'shapes not aligned', delete old model files:")
+        print("   rm tamer_model_*.pkl")
+        print("2. Make sure tamer_astar_baseline.py is in the same directory")
+        print("3. Run: python3 tamer_interactive_training.py")

@@ -227,60 +227,164 @@ class Visualizer:
         return fig
 
 def create_scenario_1():
-    """Scenario 1: Implicit Hazard Zone"""
+    """Scenario 1: Complex Hazard Avoidance with Multiple Zones"""
     world = GridWorld(50, 50)
     
-    # Add walls forming a corridor
-    world.add_obstacle(10, 0, 2, 20)
-    world.add_obstacle(10, 30, 2, 20)
-    world.add_obstacle(38, 0, 2, 20)
-    world.add_obstacle(38, 30, 2, 20)
+    # Create a more complex corridor with multiple passages
+    world.add_obstacle(10, 0, 2, 15)
+    world.add_obstacle(10, 20, 2, 10)
+    world.add_obstacle(10, 35, 2, 15)
     
-    # Add hazard zone in the middle (shortest path goes through here)
-    world.add_hazard_zone(20, 20, 10, 10)
+    world.add_obstacle(38, 0, 2, 15)
+    world.add_obstacle(38, 20, 2, 10)
+    world.add_obstacle(38, 35, 2, 15)
+    
+    # Add scattered obstacles for complexity
+    world.add_obstacle(20, 8, 2, 2)
+    world.add_obstacle(28, 8, 2, 2)
+    world.add_obstacle(20, 40, 2, 2)
+    world.add_obstacle(28, 40, 2, 2)
+    
+    # Multiple hazard zones - represents crowded areas at different times
+    world.add_hazard_zone(18, 18, 6, 6)  # Primary hazard (center-left)
+    world.add_hazard_zone(26, 18, 6, 6)  # Primary hazard (center-right)
+    world.add_hazard_zone(22, 26, 4, 4)  # Secondary hazard (below)
     
     start = (5, 25)
     goal = (45, 25)
     
-    return world, start, goal, "Scenario 1: Implicit Hazard Avoidance"
+    return world, start, goal, "Scenario 1: Multi-Hazard Navigation"
 
 def create_scenario_2():
-    """Scenario 2: Safety Margin Preference"""
+    """Scenario 2: Narrow Passage with Safety Margin Challenges"""
     world = GridWorld(50, 50)
     
-    # Create narrow passage
-    world.add_obstacle(20, 0, 2, 18)
-    world.add_obstacle(20, 22, 2, 28)
+    # Create a complex maze-like structure
+    world.add_obstacle(15, 0, 2, 15)
+    world.add_obstacle(15, 20, 2, 10)
+    world.add_obstacle(15, 35, 2, 15)
     
-    # Add obstacles near the passage
-    world.add_obstacle(15, 18, 2, 4)
-    world.add_obstacle(25, 18, 2, 4)
+    world.add_obstacle(25, 5, 2, 10)
+    world.add_obstacle(25, 20, 2, 10)
+    world.add_obstacle(25, 35, 2, 10)
     
-    start = (5, 20)
-    goal = (45, 20)
+    world.add_obstacle(35, 0, 2, 15)
+    world.add_obstacle(35, 20, 2, 10)
+    world.add_obstacle(35, 35, 2, 15)
     
-    return world, start, goal, "Scenario 2: Safety Margin Preference"
-
-def create_scenario_3():
-    """Scenario 3: Subjective Route Preference"""
-    world = GridWorld(50, 50)
+    # Add narrow obstacles near passages - requires careful navigation
+    world.add_obstacle(18, 16, 3, 2)
+    world.add_obstacle(18, 32, 3, 2)
+    world.add_obstacle(28, 16, 3, 2)
+    world.add_obstacle(28, 32, 3, 2)
     
-    # Create two equivalent paths with obstacles
-    world.add_obstacle(15, 10, 20, 2)
-    world.add_obstacle(15, 38, 20, 2)
-    
-    # Add hazard to bias toward top path
-    world.add_hazard_zone(15, 30, 20, 5)
+    # Small hazard zones near obstacles (dangerous tight spaces)
+    world.add_hazard_zone(17, 18, 2, 2)
+    world.add_hazard_zone(26, 18, 2, 2)
     
     start = (5, 25)
     goal = (45, 25)
     
-    return world, start, goal, "Scenario 3: Subjective Route Preference"
+    return world, start, goal, "Scenario 2: Maze Navigation with Safety Constraints"
+
+def create_scenario_3():
+    """Scenario 3: Multi-Route Preference with Environmental Factors"""
+    world = GridWorld(50, 50)
+    
+    # Create three distinct route options with varying obstacles
+    # Upper route obstacles
+    world.add_obstacle(15, 8, 15, 2)
+    world.add_obstacle(18, 10, 2, 3)
+    world.add_obstacle(26, 10, 2, 3)
+    
+    # Lower route obstacles  
+    world.add_obstacle(15, 40, 15, 2)
+    world.add_obstacle(18, 37, 2, 3)
+    world.add_obstacle(26, 37, 2, 3)
+    
+    # Middle route obstacles (force choice between upper/lower)
+    world.add_obstacle(22, 23, 6, 4)
+    
+    # Complex hazard pattern - simulates different environmental concerns
+    # Lower hazards (e.g., rough terrain, high traffic)
+    world.add_hazard_zone(12, 32, 8, 6)
+    world.add_hazard_zone(20, 30, 10, 4)
+    world.add_hazard_zone(30, 32, 8, 6)
+    
+    # Middle hazards (obstacles force detour)
+    world.add_hazard_zone(22, 20, 6, 2)
+    
+    start = (5, 25)
+    goal = (45, 25)
+    
+    return world, start, goal, "Scenario 3: Multi-Route Preference with Complex Hazards"
+
+def create_scenario_4():
+    """Scenario 4: Dense Urban Environment (NEW!)"""
+    world = GridWorld(50, 50)
+    
+    # Simulate city blocks with buildings
+    buildings = [
+        (10, 10, 5, 5),
+        (10, 25, 5, 5),
+        (10, 40, 5, 5),
+        (20, 10, 5, 5),
+        (20, 25, 5, 5),
+        (20, 40, 5, 5),
+        (30, 10, 5, 5),
+        (30, 25, 5, 5),
+        (30, 40, 5, 5),
+    ]
+    
+    for bx, by, bw, bh in buildings:
+        world.add_obstacle(bx, by, bw, bh)
+    
+    # Hazard zones represent busy intersections and crowded streets
+    world.add_hazard_zone(8, 15, 2, 10)    # Busy street
+    world.add_hazard_zone(15, 8, 10, 2)    # Busy intersection
+    world.add_hazard_zone(25, 15, 2, 10)   # Another busy street
+    world.add_hazard_zone(18, 38, 10, 2)   # Crowded area
+    world.add_hazard_zone(35, 20, 2, 15)   # High traffic zone
+    
+    start = (2, 25)
+    goal = (48, 25)
+    
+    return world, start, goal, "Scenario 4: Dense Urban Navigation"
+
+def create_scenario_5():
+    """Scenario 5: Dynamic Obstacle Field (NEW!)"""
+    world = GridWorld(50, 50)
+    
+    # Create a scattered obstacle field
+    import random
+    random.seed(42)  # Reproducible
+    
+    # Random obstacles simulating dynamic environment
+    for _ in range(25):
+        x = random.randint(8, 42)
+        y = random.randint(5, 45)
+        world.add_obstacle(x, y, 2, 2)
+    
+    # Hazard zones in strategic locations
+    world.add_hazard_zone(15, 15, 8, 8)
+    world.add_hazard_zone(25, 25, 10, 10)
+    world.add_hazard_zone(15, 35, 8, 8)
+    
+    start = (2, 25)
+    goal = (48, 25)
+    
+    return world, start, goal, "Scenario 5: Dynamic Obstacle Field"
 
 # Demo functions
 def run_baseline_demo():
     """Run baseline A* on all scenarios"""
-    scenarios = [create_scenario_1(), create_scenario_2(), create_scenario_3()]
+    scenarios = [
+        create_scenario_1(), 
+        create_scenario_2(), 
+        create_scenario_3(),
+        create_scenario_4(),
+        create_scenario_5()
+    ]
     
     for world, start, goal, title in scenarios:
         planner = AStarPlanner(world)
