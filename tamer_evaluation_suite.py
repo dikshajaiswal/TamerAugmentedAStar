@@ -184,11 +184,22 @@ class AutomatedTAMERTrainer:
                 hazard_cells = sum(1 for p in path if p in self.world.hazard_zones)
                 min_obstacle_dist = min(self.distance_to_nearest_obstacle(p) for p in path)
                 
+                # Calculate average obstacle distance
+                avg_obstacle_dist = 0.0
+                dist_count = 0
+                for p in path:
+                    dist = self.distance_to_nearest_obstacle(p)
+                    if dist < float('inf'):
+                        avg_obstacle_dist += dist
+                        dist_count += 1
+                avg_obstacle_dist = avg_obstacle_dist / dist_count if dist_count > 0 else 0.0
+                
                 metrics.append({
                     'iteration': iteration,
                     'path_length': path_length,
                     'hazard_cells': hazard_cells,
-                    'min_obstacle_distance': min_obstacle_dist
+                    'min_obstacle_distance': min_obstacle_dist,
+                    'avg_obstacle_distance': avg_obstacle_dist
                 })
                 
                 # Simulate and apply feedback with enhanced features
@@ -330,17 +341,36 @@ class EvaluationSuite:
                                 for i in range(len(path)-1))
                 hazard_cells = sum(1 for p in path if p in world.hazard_zones)
                 
-                # Calculate min distance to obstacles
+                # Calculate min and average distance to obstacles
                 min_obs_dist = float('inf')
+                avg_obs_dist = 0.0
+                dist_count = 0
+                
                 for p in path:
+                    min_dist_to_obs = float('inf')
                     for obs in world.obstacles:
                         dist = np.sqrt((p[0]-obs[0])**2 + (p[1]-obs[1])**2)
                         min_obs_dist = min(min_obs_dist, dist)
+                        min_dist_to_obs = min(min_dist_to_obs, dist)
+                    if min_dist_to_obs < float('inf'):
+                        avg_obs_dist += min_dist_to_obs
+                        dist_count += 1
                 
-                # Metrics box
-                metrics_text = (f"Path Length: {path_length:.1f}\n"
-                              f"Hazard Cells: {hazard_cells}\n"
-                              f"Min Obstacle Dist: {min_obs_dist:.2f}")
+                if dist_count > 0:
+                    avg_obs_dist = avg_obs_dist / dist_count
+                else:
+                    avg_obs_dist = float('inf')
+                
+                # Metrics box - include average distance for scenario 2
+                if scenario_idx == 1:  # Scenario 2 (0-indexed)
+                    metrics_text = (f"Path Length: {path_length:.1f}\n"
+                                  f"Hazard Cells: {hazard_cells}\n"
+                                  f"Min Obstacle Dist: {min_obs_dist:.2f}\n"
+                                  f"Avg Obstacle Dist: {avg_obs_dist:.2f}")
+                else:
+                    metrics_text = (f"Path Length: {path_length:.1f}\n"
+                                  f"Hazard Cells: {hazard_cells}\n"
+                                  f"Min Obstacle Dist: {min_obs_dist:.2f}")
                 
                 box_color = 'lightcoral' if hazard_cells > 0 else 'lightgreen'
                 ax.text(0.02, 0.98, metrics_text, transform=ax.transAxes,
@@ -372,28 +402,53 @@ class EvaluationSuite:
         
         df = pd.DataFrame(metrics)
         
-        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
-        
-        # Path length over iterations
-        axes[0].plot(df['iteration'], df['path_length'], 'b-o', linewidth=2)
-        axes[0].set_xlabel('Iteration', fontsize=11)
-        axes[0].set_ylabel('Path Length', fontsize=11)
-        axes[0].set_title('Path Length vs Iteration', fontweight='bold')
-        axes[0].grid(True, alpha=0.3)
-        
-        # Hazard cells over iterations
-        axes[1].plot(df['iteration'], df['hazard_cells'], 'r-o', linewidth=2)
-        axes[1].set_xlabel('Iteration', fontsize=11)
-        axes[1].set_ylabel('Hazard Cells Crossed', fontsize=11)
-        axes[1].set_title('Hazard Avoidance Learning', fontweight='bold')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Min obstacle distance over iterations
-        axes[2].plot(df['iteration'], df['min_obstacle_distance'], 'g-o', linewidth=2)
-        axes[2].set_xlabel('Iteration', fontsize=11)
-        axes[2].set_ylabel('Min Distance to Obstacle', fontsize=11)
-        axes[2].set_title('Safety Margin Improvement', fontweight='bold')
-        axes[2].grid(True, alpha=0.3)
+        # For scenario 2, show average distance instead of hazard cells
+        if scenario_idx == 1:  # Scenario 2 (0-indexed)
+            fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+            
+            # Path length over iterations
+            axes[0].plot(df['iteration'], df['path_length'], 'b-o', linewidth=2)
+            axes[0].set_xlabel('Iteration', fontsize=11)
+            axes[0].set_ylabel('Path Length', fontsize=11)
+            axes[0].set_title('Path Length vs Iteration', fontweight='bold')
+            axes[0].grid(True, alpha=0.3)
+            
+            # Average obstacle distance over iterations
+            axes[1].plot(df['iteration'], df['avg_obstacle_distance'], 'g-o', linewidth=2)
+            axes[1].set_xlabel('Iteration', fontsize=11)
+            axes[1].set_ylabel('Avg Distance to Obstacle', fontsize=11)
+            axes[1].set_title('Safety Margin Learning', fontweight='bold')
+            axes[1].grid(True, alpha=0.3)
+            
+            # Min obstacle distance over iterations
+            axes[2].plot(df['iteration'], df['min_obstacle_distance'], 'orange', marker='o', linewidth=2)
+            axes[2].set_xlabel('Iteration', fontsize=11)
+            axes[2].set_ylabel('Min Distance to Obstacle', fontsize=11)
+            axes[2].set_title('Minimum Clearance', fontweight='bold')
+            axes[2].grid(True, alpha=0.3)
+        else:
+            fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+            
+            # Path length over iterations
+            axes[0].plot(df['iteration'], df['path_length'], 'b-o', linewidth=2)
+            axes[0].set_xlabel('Iteration', fontsize=11)
+            axes[0].set_ylabel('Path Length', fontsize=11)
+            axes[0].set_title('Path Length vs Iteration', fontweight='bold')
+            axes[0].grid(True, alpha=0.3)
+            
+            # Hazard cells over iterations
+            axes[1].plot(df['iteration'], df['hazard_cells'], 'r-o', linewidth=2)
+            axes[1].set_xlabel('Iteration', fontsize=11)
+            axes[1].set_ylabel('Hazard Cells Crossed', fontsize=11)
+            axes[1].set_title('Hazard Avoidance Learning', fontweight='bold')
+            axes[1].grid(True, alpha=0.3)
+            
+            # Min obstacle distance over iterations
+            axes[2].plot(df['iteration'], df['min_obstacle_distance'], 'g-o', linewidth=2)
+            axes[2].set_xlabel('Iteration', fontsize=11)
+            axes[2].set_ylabel('Min Distance to Obstacle', fontsize=11)
+            axes[2].set_title('Safety Margin Improvement', fontweight='bold')
+            axes[2].grid(True, alpha=0.3)
         
         plt.suptitle(f"{title} - Training Progress", fontsize=13, fontweight='bold')
         plt.tight_layout()
@@ -409,22 +464,54 @@ class EvaluationSuite:
         
         # Create summary table
         summary_data = []
-        for result in self.results:
+        for idx, result in enumerate(self.results):
             baseline_path = result['baseline_path']
             tamer_path = result['tamer_path']
+            world = result['world']
             
             if baseline_path and tamer_path:
                 baseline_length = sum(np.sqrt((baseline_path[i+1][0]-baseline_path[i][0])**2 + 
                                              (baseline_path[i+1][1]-baseline_path[i][1])**2) 
                                     for i in range(len(baseline_path)-1))
-                baseline_hazards = sum(1 for p in baseline_path if p in result['world'].hazard_zones)
+                baseline_hazards = sum(1 for p in baseline_path if p in world.hazard_zones)
                 
                 tamer_length = sum(np.sqrt((tamer_path[i+1][0]-tamer_path[i][0])**2 + 
                                           (tamer_path[i+1][1]-tamer_path[i][1])**2) 
                                for i in range(len(tamer_path)-1))
-                tamer_hazards = sum(1 for p in tamer_path if p in result['world'].hazard_zones)
+                tamer_hazards = sum(1 for p in tamer_path if p in world.hazard_zones)
                 
-                summary_data.append({
+                # Calculate average obstacle distances for scenario 2
+                baseline_avg_dist = 0.0
+                tamer_avg_dist = 0.0
+                
+                if idx == 1:  # Scenario 2 (0-indexed)
+                    # Baseline average distance
+                    baseline_dist_sum = 0.0
+                    baseline_dist_count = 0
+                    for p in baseline_path:
+                        min_dist = float('inf')
+                        for obs in world.obstacles:
+                            dist = np.sqrt((p[0]-obs[0])**2 + (p[1]-obs[1])**2)
+                            min_dist = min(min_dist, dist)
+                        if min_dist < float('inf'):
+                            baseline_dist_sum += min_dist
+                            baseline_dist_count += 1
+                    baseline_avg_dist = baseline_dist_sum / baseline_dist_count if baseline_dist_count > 0 else 0.0
+                    
+                    # TAMER average distance
+                    tamer_dist_sum = 0.0
+                    tamer_dist_count = 0
+                    for p in tamer_path:
+                        min_dist = float('inf')
+                        for obs in world.obstacles:
+                            dist = np.sqrt((p[0]-obs[0])**2 + (p[1]-obs[1])**2)
+                            min_dist = min(min_dist, dist)
+                        if min_dist < float('inf'):
+                            tamer_dist_sum += min_dist
+                            tamer_dist_count += 1
+                    tamer_avg_dist = tamer_dist_sum / tamer_dist_count if tamer_dist_count > 0 else 0.0
+                
+                row_data = {
                     'Scenario': result['scenario'].split(':')[0],
                     'Baseline Length': f"{baseline_length:.1f}",
                     'TAMER Length': f"{tamer_length:.1f}",
@@ -432,7 +519,15 @@ class EvaluationSuite:
                     'Baseline Hazards': baseline_hazards,
                     'TAMER Hazards': tamer_hazards,
                     'Hazard Reduction': f"{baseline_hazards - tamer_hazards:+d}"
-                })
+                }
+                
+                # Add average distance for scenario 2
+                if idx == 1:
+                    row_data['Baseline Avg Dist'] = f"{baseline_avg_dist:.2f}"
+                    row_data['TAMER Avg Dist'] = f"{tamer_avg_dist:.2f}"
+                    row_data['Dist Improvement'] = f"{((tamer_avg_dist-baseline_avg_dist)/baseline_avg_dist*100):+.1f}%"
+                
+                summary_data.append(row_data)
         
         # Create table
         ax = plt.subplot(2, 1, 1)

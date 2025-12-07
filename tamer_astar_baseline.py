@@ -227,7 +227,7 @@ class Visualizer:
         return fig
 
 def create_scenario_1():
-    """Scenario 1: Implicit Hazard Zone"""
+    """Scenario 1: Implicit Hazard Zone - Enhanced Complexity"""
     world = GridWorld(50, 50)
     
     # Add walls forming a corridor
@@ -236,30 +236,119 @@ def create_scenario_1():
     world.add_obstacle(38, 0, 2, 20)
     world.add_obstacle(38, 30, 2, 20)
     
-    # Add hazard zone in the middle (shortest path goes through here)
-    world.add_hazard_zone(20, 20, 10, 10)
+    # ENHANCED: Multiple hazard zones of varying sizes and strategic locations
+    
+    # Large central hazard zone (original, but slightly smaller to allow more navigation options)
+    world.add_hazard_zone(20, 20, 8, 8)
+    
+    # Additional hazard zones creating a maze-like pattern
+    # Hazard zone near start - forces careful initial navigation
+    world.add_hazard_zone(12, 22, 4, 6)
+    
+    # Hazard zone near goal - requires careful final approach
+    world.add_hazard_zone(36, 22, 4, 6)
+    
+    # Scattered smaller hazard zones in the corridor
+    world.add_hazard_zone(15, 15, 3, 3)
+    world.add_hazard_zone(15, 32, 3, 3)
+    world.add_hazard_zone(32, 15, 3, 3)
+    world.add_hazard_zone(32, 32, 3, 3)
+    
+    # Hazard zones creating alternative path challenges
+    world.add_hazard_zone(25, 10, 5, 4)
+    world.add_hazard_zone(25, 36, 5, 4)
+    
+    # Narrow hazard zones that create bottlenecks
+    world.add_hazard_zone(18, 18, 2, 4)
+    world.add_hazard_zone(30, 18, 2, 4)
+    world.add_hazard_zone(18, 28, 2, 4)
+    world.add_hazard_zone(30, 28, 2, 4)
+    
+    # Additional scattered hazards for increased complexity
+    world.add_hazard_zone(22, 12, 2, 2)
+    world.add_hazard_zone(26, 12, 2, 2)
+    world.add_hazard_zone(22, 36, 2, 2)
+    world.add_hazard_zone(26, 36, 2, 2)
     
     start = (5, 25)
     goal = (45, 25)
     
-    return world, start, goal, "Scenario 1: Implicit Hazard Avoidance"
+    return world, start, goal, "Scenario 1: Implicit Hazard Avoidance (Enhanced)"
 
 def create_scenario_2():
-    """Scenario 2: Safety Margin Preference"""
+    """Scenario 2: Safety Margin Preference - Enhanced Complexity"""
     world = GridWorld(50, 50)
     
-    # Create narrow passage
+    # STRATEGIC OBSTACLE PLACEMENT: Create a path where baseline A* will go very close,
+    # but TAMER will learn to maintain better safety margins
+    
+    # Main narrow passage (forces path through center)
     world.add_obstacle(20, 0, 2, 18)
     world.add_obstacle(20, 22, 2, 28)
     
-    # Add obstacles near the passage
-    world.add_obstacle(15, 18, 2, 4)
-    world.add_obstacle(25, 18, 2, 4)
+    # CRITICAL: Place obstacles VERY close to the optimal path
+    # These will force baseline A* to squeeze through with minimal distance
+    # But TAMER should learn to go around with better margins
+    
+    # Obstacles creating tight squeeze on the direct path (y=20)
+    # Baseline will go through at y=20, passing very close (distance ~1.0)
+    world.add_obstacle(15, 19, 2, 2)  # Very close to path at y=20
+    world.add_obstacle(15, 21, 2, 2)  # Very close to path at y=20
+    world.add_obstacle(25, 19, 2, 2)  # Very close to path at y=20
+    world.add_obstacle(25, 21, 2, 2)  # Very close to path at y=20
+    
+    # Additional tight squeezes along the path
+    world.add_obstacle(10, 19, 1, 2)  # Single cell obstacle very close
+    world.add_obstacle(10, 21, 1, 2)
+    world.add_obstacle(30, 19, 1, 2)
+    world.add_obstacle(30, 21, 1, 2)
+    
+    # Obstacles near start - baseline will squeeze through
+    world.add_obstacle(7, 19, 1, 2)
+    world.add_obstacle(7, 21, 1, 2)
+    
+    # Obstacles near goal - baseline will squeeze through
+    world.add_obstacle(42, 19, 1, 2)
+    world.add_obstacle(42, 21, 1, 2)
+    
+    # Create alternative safer paths (slightly above and below y=20)
+    # TAMER should learn to prefer these with better margins
+    
+    # Safer path option above (around y=17-18)
+    world.add_obstacle(12, 15, 3, 1)  # Creates gap at y=16-17
+    world.add_obstacle(28, 15, 3, 1)
+    
+    # Safer path option below (around y=23-24)
+    world.add_obstacle(12, 24, 3, 1)  # Creates gap at y=23-24
+    world.add_obstacle(28, 24, 3, 1)
+    
+    # Additional obstacles that create narrow but safer passages
+    # These encourage TAMER to learn better margins
+    world.add_obstacle(18, 16, 1, 1)
+    world.add_obstacle(22, 16, 1, 1)
+    world.add_obstacle(18, 24, 1, 1)
+    world.add_obstacle(22, 24, 1, 1)
+    
+    # Obstacles creating side passages with better clearance
+    world.add_obstacle(14, 12, 2, 2)
+    world.add_obstacle(32, 12, 2, 2)
+    world.add_obstacle(14, 26, 2, 2)
+    world.add_obstacle(32, 26, 2, 2)
+    
+    # More obstacles along the tight path to reinforce the challenge
+    world.add_obstacle(13, 20, 1, 1)  # Right on the path - forces detour
+    world.add_obstacle(27, 20, 1, 1)   # Right on the path - forces detour
+    
+    # Obstacles near start/goal that create tight squeezes
+    world.add_obstacle(3, 19, 2, 2)
+    world.add_obstacle(3, 21, 2, 2)
+    world.add_obstacle(46, 19, 2, 2)
+    world.add_obstacle(46, 21, 2, 2)
     
     start = (5, 20)
     goal = (45, 20)
     
-    return world, start, goal, "Scenario 2: Safety Margin Preference"
+    return world, start, goal, "Scenario 2: Safety Margin Preference (Enhanced)"
 
 def create_scenario_3():
     """Scenario 3: Subjective Route Preference"""
